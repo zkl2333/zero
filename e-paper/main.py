@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding:utf-8 -*-
 import sys
-import os 
+import os
 
 import logging
 from waveshare_epd import epd2in13bc
@@ -10,6 +10,26 @@ from PIL import Image,ImageDraw,ImageFont
 import traceback
 
 import socket
+
+import struct 
+import smbus
+ 
+def readVoltage(bus):
+     "This function returns as float the voltage from the Raspi UPS Hat via the provided SMBus object" 
+     address = 0x36 
+     read = bus.read_word_data(address, 2) 
+     swapped = struct.unpack("<H", struct.pack(">H", read))[0] 
+     voltage = swapped * 1.25 /1000/16 
+     return voltage 
+def readCapacity(bus): 
+    "This function returns as a float the remaining capacity of the battery connected to the Raspi UPS Hat via the provided SMBus object" 
+    address = 0x36 
+    read = bus.read_word_data(address, 4) 
+    swapped = struct.unpack("<H", struct.pack(">H", read))[0] 
+    capacity = swapped/256 
+    return capacity 
+
+bus = smbus.SMBus(1)  # 0 = /dev/i2c-0 (port I2C0), 1 = /dev/i2c-1 (port I2C1) 
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -30,6 +50,8 @@ def get_ip():
             s.connect(('8.8.8.8', 80))
             _local_ip = s.getsockname()[0]
         return _local_ip
+    except:
+        return u"无网络"
     finally:
         if s:
             s.close()
@@ -53,20 +75,12 @@ try:
     HRYimage = Image.new('1', (epd.height, epd.width), 255)  # 298*126  ryimage: red or yellow image  
     drawblack = ImageDraw.Draw(HBlackimage)
     drawry = ImageDraw.Draw(HRYimage)
-    drawblack.text((10, 0), 'hello Vincent', font = font20, fill = 0)
-    drawblack.text((10, 20), get_ip()    , font = font20, fill = 0)
-    # drawblack.text((120, 0), u'微雪电子', font = font20, fill = 0)    
-    drawblack.line((20, 50, 70, 100), fill = 0)
-    drawblack.line((70, 50, 20, 100), fill = 0)
-    drawblack.rectangle((20, 50, 70, 100), outline = 0)    
-    drawry.line((165, 50, 165, 100), fill = 0)
-    drawry.line((140, 75, 190, 75), fill = 0)
-    drawry.arc((140, 50, 190, 100), 0, 360, fill = 0)
-    drawry.rectangle((80, 50, 130, 100), fill = 0)
-    drawry.chord((85, 55, 125, 95), 0, 360, fill =1)
+    drawblack.text((10, 0), u"你好 Vincent", font = font20, fill = 0)
+    drawblack.text((10, 20), u"当前IP:"+get_ip(), font = font20, fill = 0)
+    drawblack.text((10, 80), u"当前电量:"+ str(round(readCapacity(bus), 2)) + "%", font = font20, fill = 0)
+
     epd.display(epd.getbuffer(HBlackimage),epd.getbuffer(HRYimage))
     time.sleep(2)
-    
     logging.info("Goto Sleep...")
     epd.sleep()
         
